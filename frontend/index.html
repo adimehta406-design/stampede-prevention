@@ -23,7 +23,10 @@
             <div class="video-section glass-panel">
                 <h2>Live Surveillance Feed</h2>
                 <div class="video-wrapper">
-                    <img id="video-feed" src="/video_feed" alt="Live Feed">
+                    <!-- Canvas for rendering processed video from server -->
+                    <canvas id="video-canvas" width="640" height="480"></canvas>
+                    <!-- Hidden video element for capturing webcam -->
+                    <video id="webcam-video" autoplay playsinline muted style="display: none;"></video>
                     <div class="overlay" id="alert-overlay"></div>
                 </div>
             </div>
@@ -75,7 +78,6 @@
             <h3>Debug Console</h3>
             <div id="debug-log"></div>
         </div>
-        </main>
     </div>
     <script src="/static/script.js"></script>
 </body>

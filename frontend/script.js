@@ -20,6 +20,12 @@ const riskLevelEl = document.getElementById('risk-level');
 const fpsCounterEl = document.getElementById('fps-counter');
 const connectionStatusEl = document.getElementById('connection-status');
 
+// Video Elements
+const videoCanvas = document.getElementById('video-canvas');
+const videoCtx = videoCanvas.getContext('2d');
+const webcamVideo = document.getElementById('webcam-video');
+let streaming = false;
+
 // Chart Setup
 const ctx = document.getElementById('densityChart').getContext('2d');
 const densityChart = new Chart(ctx, {
@@ -47,10 +53,57 @@ const densityChart = new Chart(ctx, {
     }
 });
 
+// Start Webcam
+async function startWebcam() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+        webcamVideo.srcObject = stream;
+        webcamVideo.play();
+        streaming = true;
+        logDebug("Webcam access granted");
+
+        // Start sending frames
+        sendFrames();
+    } catch (err) {
+        logDebug(`Webcam Error: ${err}`, 'error');
+        alert("Please allow camera access to use this application.");
+    }
+}
+
+// Send Frames to Server
+function sendFrames() {
+    if (!streaming) return;
+
+    if (ws.readyState === WebSocket.OPEN) {
+        // Draw video frame to canvas (invisible, or use a separate offscreen canvas if needed)
+        // Here we just use the video element to get the frame
+
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = 640;
+        offscreenCanvas.height = 480;
+        const ctx = offscreenCanvas.getContext('2d');
+        ctx.drawImage(webcamVideo, 0, 0, 640, 480);
+
+        // Convert to JPEG
+        const jpegData = offscreenCanvas.toDataURL('image/jpeg', 0.5); // 0.5 quality
+
+        // Send to server
+        ws.send(JSON.stringify({
+            action: "process_frame",
+            image: jpegData
+        }));
+    }
+
+    // Limit FPS to ~15 to avoid network congestion
+    setTimeout(() => requestAnimationFrame(sendFrames), 66);
+}
+
+
 ws.onopen = () => {
     connectionStatusEl.textContent = `System Online (${protocol})`;
     connectionStatusEl.style.color = "#22c55e";
     logDebug("WebSocket Connected Successfully");
+    startWebcam();
 };
 
 ws.onerror = (error) => {
@@ -68,30 +121,41 @@ ws.onclose = (event) => {
 ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
 
+    // Check if it's a processed frame
+    if (data.processed_frame) {
+        const img = new Image();
+        img.onload = () => {
+            videoCtx.drawImage(img, 0, 0, videoCanvas.width, videoCanvas.height);
+        };
+        img.src = "data:image/jpeg;base64," + data.processed_frame;
+    }
+
     // Update Stats
-    crowdCountEl.textContent = data.count;
-    fpsCounterEl.textContent = `${data.fps} FPS`;
+    if (data.count !== undefined) {
+        crowdCountEl.textContent = data.count;
+        fpsCounterEl.textContent = `${data.fps} FPS`;
 
-    // Update Risk Level
-    if (data.status && data.status.includes("WARNING")) {
-        riskLevelEl.textContent = "CRITICAL";
-        riskLevelEl.style.color = "#ef4444";
-        document.querySelector('.video-wrapper').style.border = "2px solid #ef4444";
-    } else {
-        riskLevelEl.textContent = "NORMAL";
-        riskLevelEl.style.color = "#22c55e";
-        document.querySelector('.video-wrapper').style.border = "none";
-    }
+        // Update Risk Level
+        if (data.status && data.status.includes("WARNING")) {
+            riskLevelEl.textContent = "CRITICAL";
+            riskLevelEl.style.color = "#ef4444";
+            document.querySelector('.video-wrapper').style.border = "2px solid #ef4444";
+        } else {
+            riskLevelEl.textContent = "NORMAL";
+            riskLevelEl.style.color = "#22c55e";
+            document.querySelector('.video-wrapper').style.border = "none";
+        }
 
-    // Update Chart
-    const now = new Date().toLocaleTimeString();
-    if (densityChart.data.labels.length > 20) {
-        densityChart.data.labels.shift();
-        densityChart.data.datasets[0].data.shift();
+        // Update Chart
+        const now = new Date().toLocaleTimeString();
+        if (densityChart.data.labels.length > 20) {
+            densityChart.data.labels.shift();
+            densityChart.data.datasets[0].data.shift();
+        }
+        densityChart.data.labels.push(now);
+        densityChart.data.datasets[0].data.push(data.count);
+        densityChart.update('none'); // 'none' for performance
     }
-    densityChart.data.labels.push(now);
-    densityChart.data.datasets[0].data.push(data.count);
-    densityChart.update('none'); // 'none' for performance
 };
 
 // Button Interactions
