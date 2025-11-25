@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+.vscode/
+*.log
+cloudflared.exe
+ngrok.exe
+*.txt
+!requirements.txt
+!backend/requirements.txt
