@@ -5,7 +5,7 @@ import time
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
-from camera import VideoCamera
+from backend.camera import VideoCamera
 
 from pathlib import Path
 
