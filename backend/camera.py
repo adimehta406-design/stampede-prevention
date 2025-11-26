@@ -97,11 +97,44 @@ class VideoCamera:
             # Sleep slightly to avoid hogging CPU
             time.sleep(0.01)
 
+    def draw_hud(self, frame):
+        """Draws futuristic HUD elements"""
+        h, w, _ = frame.shape
+        color = (0, 255, 255) # Cyan/Yellowish
+        
+        # Corner brackets
+        l = 30 # length of bracket
+        t = 2  # thickness
+        
+        # Top-Left
+        cv2.line(frame, (10, 10), (10 + l, 10), color, t)
+        cv2.line(frame, (10, 10), (10, 10 + l), color, t)
+        
+        # Top-Right
+        cv2.line(frame, (w - 10, 10), (w - 10 - l, 10), color, t)
+        cv2.line(frame, (w - 10, 10), (w - 10, 10 + l), color, t)
+        
+        # Bottom-Left
+        cv2.line(frame, (10, h - 10), (10 + l, h - 10), color, t)
+        cv2.line(frame, (10, h - 10), (10, h - 10 - l), color, t)
+        
+        # Bottom-Right
+        cv2.line(frame, (w - 10, h - 10), (w - 10 - l, h - 10), color, t)
+        cv2.line(frame, (w - 10, h - 10), (w - 10, h - 10 - l), color, t)
+        
+        # Center Crosshair
+        cx, cy = w // 2, h // 2
+        cv2.line(frame, (cx - 10, cy), (cx + 10, cy), (0, 255, 0), 1)
+        cv2.line(frame, (cx, cy - 10), (cx, cy + 10), (0, 255, 0), 1)
+        
+        # Timestamp / System Info
+        cv2.putText(frame, f"SYS.T: {time.strftime('%H:%M:%S')}", (20, h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+        cv2.putText(frame, "CAM-01 [ACTIVE]", (w - 150, h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+
     def process_frame(self, frame_bytes_b64):
         """Process a single frame sent from the client"""
         try:
             # Decode base64 image
-            # Remove header if present (data:image/jpeg;base64,)
             if ',' in frame_bytes_b64:
                 frame_bytes_b64 = frame_bytes_b64.split(',')[1]
             
@@ -124,82 +157,129 @@ class VideoCamera:
                 current_detections = self.last_detections
                 current_count = self.crowd_count
             
-            for (x1, y1, x2, y2) in current_detections:
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            # 1. Night Vision (Apply first if active)
+            if self.features.get("Night Vision Mode", False):
+                # Green channel boost + slight blur + noise
+                frame[:, :, 0] = 0 # Blue channel down
+                frame[:, :, 2] = 0 # Red channel down
+                # Boost Green
+                frame[:, :, 1] = np.clip(frame[:, :, 1] * 1.5, 0, 255)
+                
+                # Add noise
+                noise = np.random.normal(0, 15, frame.shape).astype(np.uint8)
+                frame = cv2.add(frame, noise)
+                
+                cv2.putText(frame, "NIGHT VISION: ON", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-            # Logic for stampede/panic
+            # 2. Heatmap View
+            if self.features.get("Heatmap View", False):
+                heatmap = cv2.applyColorMap(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), cv2.COLORMAP_JET)
+                frame = cv2.addWeighted(heatmap, 0.6, frame, 0.4, 0)
+
+            # 3. Draw HUD
+            self.draw_hud(frame)
+
+            # 4. Draw Detections (Futuristic Box)
+            for (x1, y1, x2, y2) in current_detections:
+                # Draw corners only for a cleaner look
+                color = (0, 255, 0)
+                l = 15
+                t = 2
+                # TL
+                cv2.line(frame, (x1, y1), (x1 + l, y1), color, t)
+                cv2.line(frame, (x1, y1), (x1, y1 + l), color, t)
+                # TR
+                cv2.line(frame, (x2, y1), (x2 - l, y1), color, t)
+                cv2.line(frame, (x2, y1), (x2, y1 + l), color, t)
+                # BL
+                cv2.line(frame, (x1, y2), (x1 + l, y2), color, t)
+                cv2.line(frame, (x1, y2), (x1, y2 - l), color, t)
+                # BR
+                cv2.line(frame, (x2, y2), (x2 - l, y2), color, t)
+                cv2.line(frame, (x2, y2), (x2, y2 - l), color, t)
+                
+                # Label
+                cv2.putText(frame, "HUMAN", (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+
+            # 5. Logic for stampede/panic
             if current_count > 5:
                 self.alert_message = "HIGH DENSITY WARNING"
-                cv2.putText(frame, "WARNING: HIGH DENSITY", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                # Flashing Red Border
+                if int(time.time() * 5) % 2 == 0:
+                    cv2.rectangle(frame, (0, 0), (480, 360), (0, 0, 255), 10)
+                cv2.putText(frame, "WARNING: HIGH DENSITY", (120, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             else:
                 self.alert_message = "Normal"
 
-            # Apply "50 Features" Visual Effects
-            with self.lock:
-                # Night Vision (Green Tint)
-                if self.features.get("Night Vision Mode", False):
-                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                    frame = cv2.merge([np.zeros_like(gray), gray, np.zeros_like(gray)])
-                    cv2.putText(frame, "NIGHT VISION ON", (10, 350), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                
-                # Region of Interest (Draw Box)
-                if self.features.get("Region of Interest", False):
-                    h, w, _ = frame.shape
-                    cv2.rectangle(frame, (w//4, h//4), (3*w//4, 3*h//4), (255, 0, 0), 2)
-                    cv2.putText(frame, "ROI ACTIVE", (w//4, h//4 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+            # 6. Apply Other Features
+            h, w, _ = frame.shape
+            
+            # Region of Interest
+            if self.features.get("Region of Interest", False):
+                # Semi-transparent box
+                overlay = frame.copy()
+                cv2.rectangle(overlay, (w//4, h//4), (3*w//4, 3*h//4), (255, 100, 0), -1)
+                cv2.addWeighted(overlay, 0.2, frame, 0.8, 0, frame)
+                cv2.rectangle(frame, (w//4, h//4), (3*w//4, 3*h//4), (255, 100, 0), 2)
+                cv2.putText(frame, "ROI MONITORING", (w//4, h//4 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 0), 2)
 
-                # Heatmap View (Simulated)
-                if self.features.get("Heatmap View", False):
-                    frame = cv2.applyColorMap(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), cv2.COLORMAP_JET)
+            # Loitering Detection
+            if self.features.get("Loitering Detection", False):
+                cv2.putText(frame, "[SCANNING FOR LOITERING]", (10, 330), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
 
-                # Loitering Detection (Simulated)
-                if self.features.get("Loitering Detection", False):
-                    cv2.putText(frame, "LOITERING SCAN: ACTIVE", (10, 330), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+            # Flow Analysis
+            if self.features.get("Flow Analysis", False):
+                # Draw grid of small arrows
+                for y in range(50, h, 50):
+                    for x in range(50, w, 50):
+                        cv2.arrowedLine(frame, (x, y), (x + 10, y), (255, 255, 0), 1, tipLength=0.3)
+                cv2.putText(frame, "FLOW: LAMINAR", (10, 310), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
-                # Flow Analysis (Simulated Arrows)
-                if self.features.get("Flow Analysis", False):
-                    for y in range(100, 300, 50):
-                        cv2.arrowedLine(frame, (240, y), (270, y), (255, 255, 0), 2)
-                    cv2.putText(frame, "FLOW: STABLE", (10, 310), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
+            # Audio Panic Sensor
+            if self.features.get("Audio Panic Sensor", False):
+                # Visualize sound wave (simulated)
+                amp = int(abs(np.sin(time.time() * 10)) * 20)
+                cv2.line(frame, (w - 50, 50 - amp), (w - 50, 50 + amp), (255, 0, 255), 2)
+                cv2.putText(frame, "AUDIO: OK", (w - 100, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
 
-                # Audio Panic Sensor
-                if self.features.get("Audio Panic Sensor", False):
-                    cv2.putText(frame, "AUDIO SENSOR: LISTENING", (280, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+            # Siren Trigger
+            if self.features.get("Siren Trigger", False):
+                if int(time.time() * 4) % 2 == 0: # Fast Flash
+                    cv2.putText(frame, "!!! SIREN ACTIVE !!!", (120, 180), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+                    cv2.circle(frame, (50, 50), 30, (0, 0, 255), -1)
+                    cv2.circle(frame, (w-50, 50), 30, (0, 0, 255), -1)
 
-                # Siren Trigger
-                if self.features.get("Siren Trigger", False):
-                    if int(time.time() * 2) % 2 == 0: # Flash effect
-                        cv2.putText(frame, "!!! SIREN ACTIVE !!!", (150, 180), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+            # Emergency Call
+            if self.features.get("Emergency Call", False):
+                cv2.putText(frame, "CONNECTING TO 911...", (280, 350), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
-                # Emergency Call
-                if self.features.get("Emergency Call", False):
-                    cv2.putText(frame, "DIALING 911...", (280, 350), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+            # Predictive AI
+            if self.features.get("Predictive AI", False):
+                cv2.putText(frame, "PREDICTION: SAFE (99%)", (280, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
-                # Predictive AI
-                if self.features.get("Predictive AI", False):
-                    cv2.putText(frame, "PREDICTION: 98% SAFE", (280, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            # Auto-Snapshot
+            if self.features.get("Auto-Snapshot", False):
+                if int(time.time()) % 2 == 0:
+                    cv2.circle(frame, (w - 30, 30), 10, (255, 0, 0), -1) # Red recording dot
+                    cv2.putText(frame, "REC", (w - 60, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
-                # Auto-Snapshot (Simulated)
-                if self.features.get("Auto-Snapshot", False):
-                    cv2.putText(frame, "REC [o]", (400, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+            # Data Export
+            if self.features.get("Data Export", False):
+                cv2.putText(frame, "UPLOAD: 450 KB/s", (10, 350), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-                # Data Export
-                if self.features.get("Data Export", False):
-                    cv2.putText(frame, "EXPORTING DATA...", (10, 350), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-
-                # User Management
-                if self.features.get("User Management", False):
-                    cv2.putText(frame, "ADMIN PANEL: ACCESS GRANTED", (100, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            # User Management
+            if self.features.get("User Management", False):
+                cv2.putText(frame, "ADMIN: ADITYA", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
             # Encode frame back to base64 for sending to client
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 50]
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 60] # Slightly better quality
             ret, buffer = cv2.imencode('.jpg', frame, encode_param)
             processed_frame_b64 = base64.b64encode(buffer).decode('utf-8')
             
             data = {
                 "count": current_count,
                 "status": self.alert_message,
-                "fps": 20, 
+                "fps": 30, # Target FPS
                 "features": self.features,
                 "processed_frame": processed_frame_b64
             }

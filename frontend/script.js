@@ -74,29 +74,37 @@ async function startWebcam() {
 function sendFrames() {
     if (!streaming) return;
 
-    if (ws.readyState === WebSocket.OPEN) {
-        // Draw video frame to canvas (invisible, or use a separate offscreen canvas if needed)
-        // Here we just use the video element to get the frame
+    const now = Date.now();
+    const elapsed = now - lastFrameTime;
+    const fpsInterval = 1000 / 30; // Target 30 FPS
 
-        const offscreenCanvas = document.createElement('canvas');
-        offscreenCanvas.width = 640;
-        offscreenCanvas.height = 480;
-        const ctx = offscreenCanvas.getContext('2d');
-        ctx.drawImage(webcamVideo, 0, 0, 640, 480);
+    if (elapsed > fpsInterval) {
+        lastFrameTime = now - (elapsed % fpsInterval);
 
-        // Convert to JPEG
-        const jpegData = offscreenCanvas.toDataURL('image/jpeg', 0.5); // 0.5 quality
+        if (ws.readyState === WebSocket.OPEN) {
+            // Draw video frame to canvas (invisible, or use a separate offscreen canvas if needed)
+            const offscreenCanvas = document.createElement('canvas');
+            // Downscale to 480x360 for faster transmission, backend will process at this size anyway
+            offscreenCanvas.width = 480;
+            offscreenCanvas.height = 360;
+            const ctx = offscreenCanvas.getContext('2d');
+            ctx.drawImage(webcamVideo, 0, 0, 480, 360);
 
-        // Send to server
-        ws.send(JSON.stringify({
-            action: "process_frame",
-            image: jpegData
-        }));
+            // Convert to JPEG with slightly lower quality for speed
+            const jpegData = offscreenCanvas.toDataURL('image/jpeg', 0.6);
+
+            // Send to server
+            ws.send(JSON.stringify({
+                action: "process_frame",
+                image: jpegData
+            }));
+        }
     }
 
-    // Limit FPS to ~15 to avoid network congestion
-    setTimeout(() => requestAnimationFrame(sendFrames), 66);
+    requestAnimationFrame(sendFrames);
 }
+
+let lastFrameTime = 0;
 
 
 ws.onopen = () => {
