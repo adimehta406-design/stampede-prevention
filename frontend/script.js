@@ -75,6 +75,14 @@ function sendFrames() {
         if (ws.readyState === WebSocket.OPEN) {
             isProcessing = true; // Lock
 
+            // Safety Timeout: Reset lock if no response after 1 second
+            setTimeout(() => {
+                if (isProcessing) {
+                    console.warn("Frame processing timed out, resetting lock");
+                    isProcessing = false;
+                }
+            }, 1000);
+
             // Draw video frame to canvas
             const offscreenCanvas = document.createElement('canvas');
             offscreenCanvas.width = 480;
