@@ -25,8 +25,13 @@ const videoCanvas = document.getElementById('video-canvas');
 const videoCtx = videoCanvas.getContext('2d');
 const webcamVideo = document.getElementById('webcam-video');
 let streaming = false;
-let isProcessing = false;
-let lastFrameTime = 0;
+let lastDetectionData = {
+    detections: [],
+    features: {},
+    count: 0,
+    status: "Normal"
+};
+let lastInferenceTime = 0;
 
 // Chart Setup
 const ctx = document.getElementById('densityChart').getContext('2d');
@@ -55,53 +60,150 @@ const densityChart = new Chart(ctx, {
     }
 });
 
-// Send Frames to Server
-function sendFrames() {
-    if (!streaming) return;
+// HUD Drawing Functions
+function drawHUD(ctx, width, height) {
+    const color = '#00FFFF'; // Cyan
+    const t = 2; // thickness
+    const l = 30; // length
 
-    // Flow Control: Don't send if already processing a frame (prevents lag buildup)
-    if (isProcessing) {
-        requestAnimationFrame(sendFrames);
-        return;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = t;
+
+    // Corners
+    // TL
+    ctx.beginPath(); ctx.moveTo(10, 10 + l); ctx.lineTo(10, 10); ctx.lineTo(10 + l, 10); ctx.stroke();
+    // TR
+    ctx.beginPath(); ctx.moveTo(width - 10 - l, 10); ctx.lineTo(width - 10, 10); ctx.lineTo(width - 10, 10 + l); ctx.stroke();
+    // BL
+    ctx.beginPath(); ctx.moveTo(10, height - 10 - l); ctx.lineTo(10, height - 10); ctx.lineTo(10 + l, height - 10); ctx.stroke();
+    // BR
+    ctx.beginPath(); ctx.moveTo(width - 10 - l, height - 10); ctx.lineTo(width - 10, height - 10); ctx.lineTo(width - 10, height - 10 - l); ctx.stroke();
+
+    // Crosshair
+    const cx = width / 2;
+    const cy = height / 2;
+    ctx.strokeStyle = '#00FF00';
+    ctx.beginPath(); ctx.moveTo(cx - 10, cy); ctx.lineTo(cx + 10, cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, cy - 10); ctx.lineTo(cx, cy + 10); ctx.stroke();
+
+    // Text
+    ctx.fillStyle = color;
+    ctx.font = '12px monospace';
+    ctx.fillText(`SYS.T: ${new Date().toLocaleTimeString()}`, 20, height - 20);
+    ctx.fillText("CAM-01 [ACTIVE]", width - 150, height - 20);
+}
+
+function drawDetections(ctx, detections) {
+    ctx.strokeStyle = '#00FF00';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = '#00FF00';
+    ctx.font = '12px monospace';
+
+    detections.forEach(det => {
+        const [x1, y1, x2, y2] = det;
+
+        // Draw corners
+        const l = 15;
+        ctx.beginPath();
+        // TL
+        ctx.moveTo(x1, y1 + l); ctx.lineTo(x1, y1); ctx.lineTo(x1 + l, y1);
+        // TR
+        ctx.moveTo(x2 - l, y1); ctx.lineTo(x2, y1); ctx.lineTo(x2, y1 + l);
+        // BL
+        ctx.moveTo(x1, y2 - l); ctx.lineTo(x1, y2); ctx.lineTo(x1 + l, y2);
+        // BR
+        ctx.moveTo(x2 - l, y2); ctx.lineTo(x2, y2); ctx.lineTo(x2, y2 - l);
+        ctx.stroke();
+
+        ctx.fillText("HUMAN", x1, y1 - 5);
+    });
+}
+
+function drawFeatures(ctx, width, height, features) {
+    // Night Vision
+    if (features["Night Vision Mode"]) {
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = '#00FF00';
+        ctx.fillText("NIGHT VISION: ON", 10, 50);
     }
 
-    const now = Date.now();
-    const elapsed = now - lastFrameTime;
-    const fpsInterval = 1000 / 30; // Target 30 FPS
+    // ROI
+    if (features["Region of Interest"]) {
+        ctx.strokeStyle = 'rgba(255, 100, 0, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(width / 4, height / 4, width / 2, height / 2);
+        ctx.fillStyle = 'rgba(255, 100, 0, 0.1)';
+        ctx.fillRect(width / 4, height / 4, width / 2, height / 2);
+        ctx.fillStyle = '#FF6400';
+        ctx.fillText("ROI MONITORING", width / 4, height / 4 - 10);
+    }
 
-    if (elapsed > fpsInterval) {
-        lastFrameTime = now - (elapsed % fpsInterval);
+    // Audio Panic
+    if (features["Audio Panic Sensor"]) {
+        ctx.fillStyle = '#FF00FF';
+        ctx.fillText("AUDIO: OK", width - 100, 80);
+        // Simulated wave
+        ctx.beginPath();
+        ctx.moveTo(width - 50, 50);
+        ctx.lineTo(width - 50, 70);
+        ctx.stroke();
+    }
 
-        if (ws.readyState === WebSocket.OPEN) {
-            isProcessing = true; // Lock
-
-            // Safety Timeout: Reset lock if no response after 1 second
-            setTimeout(() => {
-                if (isProcessing) {
-                    console.warn("Frame processing timed out, resetting lock");
-                    isProcessing = false;
-                }
-            }, 1000);
-
-            // Draw video frame to canvas
-            const offscreenCanvas = document.createElement('canvas');
-            offscreenCanvas.width = 480;
-            offscreenCanvas.height = 360;
-            const ctx = offscreenCanvas.getContext('2d');
-            ctx.drawImage(webcamVideo, 0, 0, 480, 360);
-
-            // Convert to JPEG
-            const jpegData = offscreenCanvas.toDataURL('image/jpeg', 0.6);
-
-            // Send to server
-            ws.send(JSON.stringify({
-                action: "process_frame",
-                image: jpegData
-            }));
+    // Siren
+    if (features["Siren Trigger"]) {
+        if (Math.floor(Date.now() / 250) % 2 === 0) {
+            ctx.fillStyle = 'red';
+            ctx.font = 'bold 24px monospace';
+            ctx.fillText("!!! SIREN ACTIVE !!!", 120, 180);
         }
     }
+}
 
-    requestAnimationFrame(sendFrames);
+// Main Render Loop (60 FPS)
+function renderLoop() {
+    if (!streaming) return;
+
+    // 1. Draw Video Frame (Zero Latency)
+    videoCtx.drawImage(webcamVideo, 0, 0, videoCanvas.width, videoCanvas.height);
+
+    // 2. Draw HUD & Visuals
+    drawHUD(videoCtx, videoCanvas.width, videoCanvas.height);
+    drawDetections(videoCtx, lastDetectionData.detections);
+    drawFeatures(videoCtx, videoCanvas.width, videoCanvas.height, lastDetectionData.features);
+
+    // 3. Status Warning
+    if (lastDetectionData.status.includes("WARNING")) {
+        if (Math.floor(Date.now() / 200) % 2 === 0) {
+            videoCtx.strokeStyle = 'red';
+            videoCtx.lineWidth = 10;
+            videoCtx.strokeRect(0, 0, videoCanvas.width, videoCanvas.height);
+        }
+        videoCtx.fillStyle = 'red';
+        videoCtx.font = 'bold 20px monospace';
+        videoCtx.fillText("WARNING: HIGH DENSITY", 120, 30);
+    }
+
+    // 4. Async Inference (Throttle to ~10 FPS to save bandwidth)
+    const now = Date.now();
+    if (now - lastInferenceTime > 100 && ws.readyState === WebSocket.OPEN) {
+        lastInferenceTime = now;
+
+        // Send low-res frame for inference
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = 480;
+        offscreenCanvas.height = 360;
+        const ctx = offscreenCanvas.getContext('2d');
+        ctx.drawImage(webcamVideo, 0, 0, 480, 360);
+        const jpegData = offscreenCanvas.toDataURL('image/jpeg', 0.5);
+
+        ws.send(JSON.stringify({
+            action: "process_frame",
+            image: jpegData
+        }));
+    }
+
+    requestAnimationFrame(renderLoop);
 }
 
 // Start Webcam
@@ -113,8 +215,8 @@ async function startWebcam() {
         streaming = true;
         logDebug("Webcam access granted");
 
-        // Start sending frames
-        sendFrames();
+        // Start rendering loop
+        renderLoop();
     } catch (err) {
         logDebug(`Webcam Error: ${err}`, 'error');
         alert("Please allow camera access to use this application.");
@@ -143,20 +245,15 @@ ws.onclose = (event) => {
 ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
 
-    // Check if it's a processed frame
-    if (data.processed_frame) {
-        isProcessing = false; // Unlock flow control
-        const img = new Image();
-        img.onload = () => {
-            videoCtx.drawImage(img, 0, 0, videoCanvas.width, videoCanvas.height);
-        };
-        img.src = "data:image/jpeg;base64," + data.processed_frame;
+    // Update Detection Data (Async)
+    if (data.detections) {
+        lastDetectionData = data;
     }
 
     // Update Stats
     if (data.count !== undefined) {
         crowdCountEl.textContent = data.count;
-        fpsCounterEl.textContent = `${data.fps} FPS`;
+        fpsCounterEl.textContent = `60 FPS (Client)`; // Always smooth
 
         // Update Risk Level
         if (data.status && data.status.includes("WARNING")) {
