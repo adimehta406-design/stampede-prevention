@@ -28,14 +28,14 @@ class VideoCamera:
         self.latest_frame_for_inference = None
         self.inference_lock = threading.Lock()
         
-        # "50 Features" - ALL ENABLED BY DEFAULT
+        # "50 Features" - DEFAULT CONFIGURATION (Optimized for Clean View)
         self.features = {
-            "roi_active": True,
+            "roi_active": False,
             "loitering_detection": True,
             "flow_analysis": True,
-            "night_vision": True,
+            "night_vision": False,
             "sensitivity": 0.8,
-            "Heatmap View": True,
+            "Heatmap View": False,
             "Audio Panic Sensor": True,
             "Siren Trigger": True,
             "Emergency Call": True,
@@ -43,8 +43,8 @@ class VideoCamera:
             "Auto-Snapshot": True,
             "Data Export": True,
             "User Management": True,
-            "Region of Interest": True,
-            "Night Vision Mode": True
+            "Region of Interest": False,
+            "Night Vision Mode": False
         }
 
         # Start Inference Thread

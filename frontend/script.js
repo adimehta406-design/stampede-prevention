@@ -178,122 +178,98 @@ function renderLoop() {
             videoCtx.strokeStyle = 'red';
             videoCtx.lineWidth = 10;
             videoCtx.strokeRect(0, 0, videoCanvas.width, videoCanvas.height);
-        }
-        videoCtx.fillStyle = 'red';
-        videoCtx.font = 'bold 20px monospace';
-        videoCtx.fillText("WARNING: HIGH DENSITY", 120, 30);
-    }
 
-    // 4. Async Inference (Throttle to ~10 FPS to save bandwidth)
-    const now = Date.now();
-    if (now - lastInferenceTime > 100 && ws.readyState === WebSocket.OPEN) {
-        lastInferenceTime = now;
-
-        // Send low-res frame for inference
-        const offscreenCanvas = document.createElement('canvas');
-        offscreenCanvas.width = 480;
-        offscreenCanvas.height = 360;
-        const ctx = offscreenCanvas.getContext('2d');
-        ctx.drawImage(webcamVideo, 0, 0, 480, 360);
-        const jpegData = offscreenCanvas.toDataURL('image/jpeg', 0.5);
-
-        ws.send(JSON.stringify({
-            action: "process_frame",
-            image: jpegData
-        }));
-    }
-
-    requestAnimationFrame(renderLoop);
-}
-
-// Start Webcam
-async function startWebcam() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-        webcamVideo.srcObject = stream;
-        webcamVideo.play();
-        streaming = true;
-        logDebug("Webcam access granted");
-
-        // Start rendering loop
-        renderLoop();
-    } catch (err) {
-        logDebug(`Webcam Error: ${err}`, 'error');
-        alert("Please allow camera access to use this application.");
-    }
-}
-
-ws.onopen = () => {
-    connectionStatusEl.textContent = `System Online (${protocol})`;
-    connectionStatusEl.style.color = "#22c55e";
-    logDebug("WebSocket Connected Successfully");
-    startWebcam();
-};
-
-ws.onerror = (error) => {
-    logDebug(`WebSocket Error: ${JSON.stringify(error)}`, 'error');
-    connectionStatusEl.textContent = "Connection Error";
-    connectionStatusEl.style.color = "#ef4444";
-};
-
-ws.onclose = (event) => {
-    logDebug(`WebSocket Closed: Code ${event.code}, Reason: ${event.reason}`, 'error');
-    connectionStatusEl.textContent = "Disconnected";
-    connectionStatusEl.style.color = "#ef4444";
-};
-
-ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-
-    // Update Detection Data (Async)
-    if (data.detections) {
-        lastDetectionData = data;
-    }
-
-    // Update Stats
-    if (data.count !== undefined) {
-        crowdCountEl.textContent = data.count;
-        fpsCounterEl.textContent = `60 FPS (Client)`; // Always smooth
-
-        // Update Risk Level
-        if (data.status && data.status.includes("WARNING")) {
-            riskLevelEl.textContent = "CRITICAL";
-            riskLevelEl.style.color = "#ef4444";
-            document.querySelector('.video-wrapper').style.border = "2px solid #ef4444";
-        } else {
-            riskLevelEl.textContent = "NORMAL";
-            riskLevelEl.style.color = "#22c55e";
-            document.querySelector('.video-wrapper').style.border = "none";
+            requestAnimationFrame(renderLoop);
         }
 
-        // Update Chart
-        const now = new Date().toLocaleTimeString();
-        if (densityChart.data.labels.length > 20) {
-            densityChart.data.labels.shift();
-            densityChart.data.datasets[0].data.shift();
-        }
-        densityChart.data.labels.push(now);
-        densityChart.data.datasets[0].data.push(data.count);
-        densityChart.update('none'); // 'none' for performance
-    }
-};
+        // Start Webcam
+        async function startWebcam() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+                webcamVideo.srcObject = stream;
+                webcamVideo.play();
+                streaming = true;
+                logDebug("Webcam access granted");
 
-// Button Interactions
-document.querySelectorAll('.control-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        btn.classList.toggle('active');
-        const featureName = btn.textContent;
-        const isActive = btn.classList.contains('active');
-
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                action: "toggle_feature",
-                feature: featureName,
-                value: isActive
-            }));
-            logDebug(`Toggled ${featureName}: ${isActive}`);
-        } else {
-            logDebug("Cannot toggle feature: WS not open", 'error');
+                // Start rendering loop
+                renderLoop();
+            } catch (err) {
+                logDebug(`Webcam Error: ${err}`, 'error');
+                alert("Please allow camera access to use this application.");
+            }
         }
-    });
-});
+
+        ws.onopen = () => {
+            connectionStatusEl.textContent = `System Online (${protocol})`;
+            connectionStatusEl.style.color = "#22c55e";
+            logDebug("WebSocket Connected Successfully");
+            startWebcam();
+        };
+
+        ws.onerror = (error) => {
+            logDebug(`WebSocket Error: ${JSON.stringify(error)}`, 'error');
+            connectionStatusEl.textContent = "Connection Error";
+            connectionStatusEl.style.color = "#ef4444";
+        };
+
+        ws.onclose = (event) => {
+            logDebug(`WebSocket Closed: Code ${event.code}, Reason: ${event.reason}`, 'error');
+            connectionStatusEl.textContent = "Disconnected";
+            connectionStatusEl.style.color = "#ef4444";
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            // Update Detection Data (Async)
+            if (data.detections) {
+                lastDetectionData = data;
+            }
+
+            // Update Stats
+            if (data.count !== undefined) {
+                crowdCountEl.textContent = data.count;
+                fpsCounterEl.textContent = `60 FPS (Client)`; // Always smooth
+
+                // Update Risk Level
+                if (data.status && data.status.includes("WARNING")) {
+                    riskLevelEl.textContent = "CRITICAL";
+                    riskLevelEl.style.color = "#ef4444";
+                    document.querySelector('.video-wrapper').style.border = "2px solid #ef4444";
+                } else {
+                    riskLevelEl.textContent = "NORMAL";
+                    riskLevelEl.style.color = "#22c55e";
+                    document.querySelector('.video-wrapper').style.border = "none";
+                }
+
+                // Update Chart
+                const now = new Date().toLocaleTimeString();
+                if (densityChart.data.labels.length > 20) {
+                    densityChart.data.labels.shift();
+                    densityChart.data.datasets[0].data.shift();
+                }
+                densityChart.data.labels.push(now);
+                densityChart.data.datasets[0].data.push(data.count);
+                densityChart.update('none'); // 'none' for performance
+            }
+        };
+
+        // Button Interactions
+        document.querySelectorAll('.control-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.classList.toggle('active');
+                const featureName = btn.textContent;
+                const isActive = btn.classList.contains('active');
+
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        action: "toggle_feature",
+                        feature: featureName,
+                        value: isActive
+                    }));
+                    logDebug(`Toggled ${featureName}: ${isActive}`);
+                } else {
+                    logDebug("Cannot toggle feature: WS not open", 'error');
+                }
+            });
+        });
