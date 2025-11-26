@@ -272,7 +272,7 @@ class VideoCamera:
                 cv2.putText(frame, "ADMIN: ADITYA", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
             # Encode frame back to base64 for sending to client
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 60] # Slightly better quality
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 50] # Optimized for speed
             ret, buffer = cv2.imencode('.jpg', frame, encode_param)
             processed_frame_b64 = base64.b64encode(buffer).decode('utf-8')
             

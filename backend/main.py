@@ -36,8 +36,10 @@ async def websocket_endpoint(websocket: WebSocket):
             command = json.loads(data)
             
             if command.get("action") == "process_frame":
-                # Process frame and send back result immediately
-                result = camera.process_frame(command["image"])
+                # Process frame in a separate thread to avoid blocking the async loop
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(None, camera.process_frame, command["image"])
+                
                 if result:
                     await websocket.send_json(result)
             
