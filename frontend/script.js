@@ -185,7 +185,7 @@ function renderLoop() {
         }
 
 ws.onopen = () => {
-    connectionStatusEl.textContent = `System Online (${protocol})`;
+    connectionStatusEl.textContent = `System Online (${protocol}) - v2.1 (Hybrid)`;
     connectionStatusEl.style.color = "#22c55e";
     logDebug("WebSocket Connected Successfully");
     startWebcam();
