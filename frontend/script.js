@@ -170,25 +170,6 @@ function renderLoop() {
     // 2. Draw HUD & Visuals
     drawHUD(videoCtx, videoCanvas.width, videoCanvas.height);
     drawDetections(videoCtx, lastDetectionData.detections);
-    drawFeatures(videoCtx, videoCanvas.width, videoCanvas.height, lastDetectionData.features);
-
-    webcamVideo.play();
-    streaming = true;
-    logDebug("Webcam access granted");
-
-    // Start rendering loop
-    renderLoop();
-} catch (err) {
-    logDebug(`Webcam Error: ${err}`, 'error');
-    alert("Please allow camera access to use this application.");
-}
-        }
-
-ws.onopen = () => {
-    connectionStatusEl.textContent = `System Online (${protocol}) - v2.1 (Hybrid)`;
-    connectionStatusEl.style.color = "#22c55e";
-    logDebug("WebSocket Connected Successfully");
-    startWebcam();
 };
 
 ws.onerror = (error) => {
