@@ -326,3 +326,6 @@ async function startWebcam() {
         showError(`Camera Access Denied: ${err.message}. Please allow camera access.`);
     }
 }
+
+// Start Webcam Immediately
+startWebcam();
