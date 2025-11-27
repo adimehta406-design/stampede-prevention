@@ -57,23 +57,23 @@ class VideoCamera:
 
     def update_inference(self):
         """Background thread for running YOLO inference"""
-        frame_counter = 0
+        self.new_frame_available = False
+        
         while self.running:
             frame_to_process = None
             
             with self.inference_lock:
-                if self.latest_frame_for_inference is not None:
+                if self.latest_frame_for_inference is not None and self.new_frame_available:
                     frame_to_process = self.latest_frame_for_inference.copy()
+                    self.new_frame_available = False # Reset flag
             
             if frame_to_process is None:
-                time.sleep(0.01)
+                time.sleep(0.005) # Short sleep to prevent CPU spinning
                 continue
 
-            # Skip frames for inference (Run every 3rd frame)
-            frame_counter += 1
-            if frame_counter % 3 != 0:
-                time.sleep(0.01)
-                continue
+            # REMOVED: Arbitrary frame skipping (frame_counter % 3)
+            # We now rely on the client sending frames at a controlled rate (10 FPS)
+            # and only processing NEW frames.
 
             # Run YOLO (Heavy operation)
             results = self.model(frame_to_process, verbose=False)
@@ -145,12 +145,13 @@ class VideoCamera:
             if frame is None:
                 return None, {}
 
-            # Resize for consistent processing
-            frame = cv2.resize(frame, (480, 360))
+            # Resize for consistent processing (Match client send resolution 320x240 to avoid upscaling artifacts)
+            # frame = cv2.resize(frame, (480, 360)) # REMOVED: Caused upscaling and lag
 
             # Update frame for inference thread
             with self.inference_lock:
                 self.latest_frame_for_inference = frame
+                self.new_frame_available = True # Signal that a new frame is ready
             
             # Draw bounding boxes (from latest known detections)
             with self.lock:

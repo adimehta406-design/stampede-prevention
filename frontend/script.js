@@ -118,6 +118,8 @@ connectWebSocket();
 
 // Video Elements
 const videoCanvas = document.getElementById('video-canvas');
+// Fix "Yellow Webcam" - Adjust Hue/Saturation
+videoCanvas.style.filter = "hue-rotate(-10deg) saturate(1.1) contrast(1.1)";
 const videoCtx = videoCanvas.getContext('2d');
 const webcamVideo = document.getElementById('webcam-video');
 let streaming = false;
@@ -280,9 +282,10 @@ function renderLoop() {
         videoCtx.fillText("WARNING: HIGH DENSITY", 120, 30);
     }
 
-    // 4. Async Inference (Throttle to ~5 FPS to save CPU/Bandwidth)
+    // 4. Async Inference (Throttle to ~10 FPS for smoother tracking)
     const now = Date.now();
-    if (now - lastInferenceTime > 200 && ws.readyState === WebSocket.OPEN) {
+    // Reduced from 200ms (5 FPS) to 100ms (10 FPS)
+    if (now - lastInferenceTime > 100 && ws.readyState === WebSocket.OPEN) {
         lastInferenceTime = now;
 
         // Send low-res frame for inference (320x240 is enough for YOLO)
