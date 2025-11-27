@@ -59,7 +59,7 @@ function connectWebSocket() {
         const overlay = document.getElementById('alert-overlay');
         if (overlay) overlay.style.display = 'none';
 
-        startWebcam();
+        // startWebcam(); // MOVED: Webcam now starts independently of connection
     };
 
     ws.onerror = (error) => {
