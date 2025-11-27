@@ -28,6 +28,7 @@ function showError(msg) {
 
 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const wsUrl = `${protocol}//${window.location.host}/ws`;
+logDebug(`Constructed WebSocket URL: ${wsUrl}`);
 let ws;
 let connectionTimeout;
 
