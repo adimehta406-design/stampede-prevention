@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Rocket Escape</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div class="scanlines"></div>
+
+        <div id="ui-layer">
+            <div id="hud" class="hidden">
+                <div class="hud-item">TIME: <span id="timeDisplay">0.00</span>s</div>
+                <div class="hud-item">SCORE: <span id="scoreDisplay">0</span></div>
+                <div class="hud-item">BEST: <span id="bestDisplay">0.00</span>s</div>
+            </div>
+
+            <div id="start-screen" class="screen">
+                <h1 class="neon-text flicker">NEON ROCKET<br>ESCAPE</h1>
+                <p class="subtitle">SURVIVE 60 SECONDS IF YOU CAN</p>
+                <div class="controls-info">
+                    <p>WASD / ARROWS to Move</p>
+                    <p>Dodge Obstacles</p>
+                </div>
+                <button id="startBtn" class="neon-btn">INITIATE LAUNCH</button>
+            </div>
+
+            <div id="game-over-screen" class="screen hidden">
+                <h1 class="neon-text red-neon">SYSTEM FAILURE</h1>
+                <p class="subtitle">ROCKET DESTROYED</p>
+                <div class="stats-box">
+                    <p>SURVIVED: <span id="finalTime">0.00</span>s</p>
+                    <p>SCORE: <span id="finalScore">0</span></p>
+                </div>
+                <button id="restartBtn" class="neon-btn">RETRY MISSION</button>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+
+</html>

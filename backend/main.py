@@ -17,6 +17,7 @@ FRONTEND_DIR = BASE_DIR.parent / "frontend"
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+app.mount("/game", StaticFiles(directory=str(BASE_DIR.parent / "neon-rocket-escape"), html=True), name="game")
 
 camera = VideoCamera()
 
